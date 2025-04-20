@@ -45,6 +45,18 @@
           </div>
         </div>
         
+        <div class="flex justify-center mt-4 mb-6">
+          <button 
+            @click="resetQuizData" 
+            class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Réinitialiser les données
+          </button>
+        </div>
+        
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <!-- Filtres de catégories -->
           <div class="flex-1">
@@ -158,27 +170,93 @@
             </div>
           </div>
           
-          <div v-if="filteredQuizzes.length === 0" class="bg-gray-800 rounded-xl p-8 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <!-- Message si aucun résultat -->
+          <div v-if="filteredQuizzes.length === 0" class="text-center py-16 bg-gray-800 rounded-xl">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <h3 class="text-xl font-medium text-gray-300 mb-2">Aucun quiz ne correspond à votre recherche</h3>
-            <p class="text-gray-400 mb-4">Essayez de modifier vos critères de recherche ou de réinitialiser les filtres.</p>
-            <button 
-              @click="resetFilters" 
-              class="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition"
-            >
+            <h3 class="text-xl font-semibold text-gray-400 mb-2">Aucun quiz ne correspond à votre recherche</h3>
+            <p class="text-gray-500">Essayez de modifier vos critères de recherche ou de réinitialiser les filtres.</p>
+            <button @click="resetFilters" class="mt-4 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition">
               Réinitialiser les filtres
             </button>
           </div>
           
-          <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <QuizCard 
-              v-for="quiz in sortedQuizzes" 
-              :key="quiz.id" 
-              :quiz="quiz"
-              @start="startQuiz(quiz.id)"
-            />
+          <!-- Grille de quiz avec pagination -->
+          <div v-else>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <TransitionGroup name="quiz-card">
+                <div v-for="quiz in paginatedQuizzes" :key="quiz.id">
+                  <QuizCard :quiz="quiz" @start="startQuiz(quiz.id)" />
+                </div>
+              </TransitionGroup>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="mt-10 flex justify-center">
+              <nav class="flex items-center space-x-2">
+                <button 
+                  @click="currentPage = 1" 
+                  :disabled="currentPage === 1"
+                  class="px-3 py-1 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :class="{ 'opacity-50 cursor-not-allowed': currentPage === 1 }"
+                >
+                  <span class="sr-only">Première page</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M15.707 15.707a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 010 1.414zm-6 0a1 1 0 01-1.414 0l-5-5a1 1 0 010-1.414l5-5a1 1 0 011.414 1.414L5.414 10l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                
+                <button 
+                  @click="prevPage" 
+                  :disabled="currentPage === 1"
+                  class="px-3 py-1 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :class="{ 'opacity-50 cursor-not-allowed': currentPage === 1 }"
+                >
+                  <span class="sr-only">Page précédente</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                
+                <div class="flex space-x-1">
+                  <button 
+                    v-for="page in displayedPageNumbers" 
+                    :key="page"
+                    @click="goToPage(page)"
+                    class="px-3 py-1 rounded-md"
+                    :class="page === currentPage ? 'bg-pink-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                  >
+                    {{ page }}
+                  </button>
+                </div>
+                
+                <button 
+                  @click="nextPage" 
+                  :disabled="currentPage === totalPages"
+                  class="px-3 py-1 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :class="{ 'opacity-50 cursor-not-allowed': currentPage === totalPages }"
+                >
+                  <span class="sr-only">Page suivante</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                
+                <button 
+                  @click="currentPage = totalPages" 
+                  :disabled="currentPage === totalPages"
+                  class="px-3 py-1 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :class="{ 'opacity-50 cursor-not-allowed': currentPage === totalPages }"
+                >
+                  <span class="sr-only">Dernière page</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10.293 15.707a1 1 0 010-1.414L14.586 10l-4.293-4.293a1 1 0 111.414-1.414l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd" d="M4.293 15.707a1 1 0 010-1.414L8.586 10 4.293 5.707a1 1 0 011.414-1.414l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </nav>
+            </div>
           </div>
         </div>
         
@@ -216,7 +294,7 @@
 
 <script setup lang="ts">
 import { useQuizStore } from '~/stores/quiz';
-import { onMounted, computed, ref } from 'vue';
+import { onMounted, computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import QuizCard from '~/components/QuizCard.vue';
 
@@ -286,6 +364,74 @@ const sortedQuizzes = computed(() => {
   }
 });
 
+// Pagination
+const itemsPerPage = 15; // Nombre de quiz par page
+const currentPage = ref(1);
+
+// Calculer le nombre total de pages
+const totalPages = computed(() => {
+  return Math.ceil(sortedQuizzes.value.length / itemsPerPage);
+});
+
+// Obtenir les quiz pour la page actuelle
+const paginatedQuizzes = computed(() => {
+  const startIndex = (currentPage.value - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  return sortedQuizzes.value.slice(startIndex, endIndex);
+});
+
+// Calculer les numéros de page à afficher (max 5 pages visibles)
+const displayedPageNumbers = computed(() => {
+  const maxVisiblePages = 5;
+  let startPage = Math.max(1, currentPage.value - Math.floor(maxVisiblePages / 2));
+  let endPage = startPage + maxVisiblePages - 1;
+  
+  if (endPage > totalPages.value) {
+    endPage = totalPages.value;
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
+  
+  const pages = [];
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+  
+  return pages;
+});
+
+// Fonctions de navigation
+function prevPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--;
+    scrollToTop();
+  }
+}
+
+function nextPage() {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++;
+    scrollToTop();
+  }
+}
+
+function goToPage(page: number) {
+  currentPage.value = page;
+  scrollToTop();
+}
+
+// Remonter en haut de la liste des quiz lors du changement de page
+function scrollToTop() {
+  window.scrollTo({
+    top: document.querySelector('.grid')?.offsetTop - 100 || 0,
+    behavior: 'smooth'
+  });
+}
+
+// Réinitialiser la page courante lorsque les filtres changent
+watch([selectedCategoryId, selectedDifficulty, searchQuery, sortOption], () => {
+  currentPage.value = 1;
+});
+
 // Réinitialiser tous les filtres
 function resetFilters() {
   selectedCategoryId.value = null;
@@ -311,6 +457,14 @@ function startQuiz(quizId: number) {
 
 function logout() {
   quizStore.logout();
+}
+
+function resetQuizData() {
+  if (confirm('Cette action va réinitialiser tous les quiz et charger les nouveaux quiz. Continuer?')) {
+    localStorage.removeItem('quizzes');
+    quizStore.initializeQuizzes();
+    window.location.reload();
+  }
 }
 </script>
 
