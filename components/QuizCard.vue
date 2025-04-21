@@ -1,8 +1,8 @@
 <template>
-  <div 
-    class="bg-gray-800 rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1 transition-transform cursor-pointer"
-    @click="$emit('start')"
-  >
+  <div :class="[
+    'rounded-xl overflow-hidden transition-transform hover:scale-105 relative',
+    quizStore.isDayMode ? 'bg-white border border-gray-100 shadow-sm hover:shadow-xl' : 'bg-gray-800 shadow-lg'
+  ]" @click="$emit('start')">
     <div class="h-48 overflow-hidden relative">
       <!-- Image principale avec fallback -->
       <img 
@@ -15,38 +15,49 @@
       <!-- Overlay pour améliorer la lisibilité du texte sur l'image -->
       <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-70"></div>
       
-      <!-- Badge de difficulté -->
-      <div class="absolute top-3 right-3">
-        <span class="px-2 py-1 text-xs rounded-full font-bold" 
+      <!-- Badge de difficulté - déplacé en haut à gauche -->
+      <div class="absolute top-3 left-3">
+        <span class="px-2 py-1 text-xs rounded-full font-bold shadow-sm" 
           :class="{
-            'bg-green-500 text-green-100': quiz.difficulty === 'Facile',
-            'bg-yellow-500 text-yellow-100': quiz.difficulty === 'Moyen',
-            'bg-orange-500 text-orange-100': quiz.difficulty === 'Difficile',
-            'bg-red-500 text-red-100': quiz.difficulty === 'Expert'
+            'bg-green-100 text-green-800 border border-green-200': quiz.difficulty === 'Facile' && quizStore.isDayMode,
+            'bg-yellow-100 text-yellow-800 border border-yellow-200': quiz.difficulty === 'Moyen' && quizStore.isDayMode,
+            'bg-orange-100 text-orange-800 border border-orange-200': quiz.difficulty === 'Difficile' && quizStore.isDayMode,
+            'bg-red-100 text-red-800 border border-red-200': quiz.difficulty === 'Expert' && quizStore.isDayMode,
+            'bg-green-500 text-green-100': quiz.difficulty === 'Facile' && !quizStore.isDayMode,
+            'bg-yellow-500 text-yellow-100': quiz.difficulty === 'Moyen' && !quizStore.isDayMode,
+            'bg-orange-500 text-orange-100': quiz.difficulty === 'Difficile' && !quizStore.isDayMode,
+            'bg-red-500 text-red-100': quiz.difficulty === 'Expert' && !quizStore.isDayMode
           }">
           {{ quiz.difficulty }}
         </span>
       </div>
+      
+      <!-- Bouton de favoris - reste en haut à droite -->
+      <FavoriteButton :quiz-id="quiz.id" />
     </div>
     
     <div class="p-6">
       <div class="flex items-center mb-4">
-        <div class="bg-pink-500 rounded-full p-2 mr-3">
+        <div :class="{'bg-purple-600': quizStore.isDayMode, 'bg-pink-500': !quizStore.isDayMode}" class="rounded-full p-2 mr-3">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 class="text-xl font-bold text-white">{{ quiz.title }}</h3>
+        <h3 class="text-xl font-bold" :class="{'text-gray-800': quizStore.isDayMode, 'text-white': !quizStore.isDayMode}">
+          {{ quiz.title }}
+        </h3>
       </div>
       
-      <p class="text-gray-300 mb-4">{{ quiz.description }}</p>
+      <p :class="{'text-gray-600': quizStore.isDayMode, 'text-gray-300': !quizStore.isDayMode}" class="mb-4">
+        {{ quiz.description }}
+      </p>
       
       <div class="flex justify-between items-center">
         <div class="flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-pink-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" :class="{'text-purple-600': quizStore.isDayMode, 'text-pink-400': !quizStore.isDayMode}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span class="text-sm text-gray-400">{{ quiz.questions.length }} questions</span>
+          <span class="text-sm" :class="{'text-gray-500': quizStore.isDayMode, 'text-gray-400': !quizStore.isDayMode}">{{ quiz.questions.length }} questions</span>
         </div>
         
         <div class="flex items-center">
@@ -56,6 +67,32 @@
           <span class="text-sm text-gray-400">{{ getCategoryName(quiz.categoryId) }}</span>
         </div>
       </div>
+      
+      <div class="mt-4 flex justify-between items-center">
+        <button 
+          @click.stop="$emit('start')" 
+          class="px-4 py-2 rounded-lg text-white font-medium transition-colors"
+          :class="{'bg-blue-600 hover:bg-blue-700': quizStore.isDayMode, 'bg-pink-600 hover:bg-pink-700': !quizStore.isDayMode}"
+        >
+          Commencer
+        </button>
+        
+        <!-- Bouton mode compétition -->
+        <button 
+          v-if="hasPreviousScore"
+          @click.stop="$emit('ghost-mode')" 
+          class="px-3 py-1 rounded-lg text-sm font-medium transition-colors flex items-center"
+          :class="{
+            'bg-indigo-100 text-indigo-800 hover:bg-indigo-200': quizStore.isDayMode, 
+            'bg-purple-900 text-purple-200 hover:bg-purple-800': !quizStore.isDayMode
+          }"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Compétition
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -63,6 +100,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useQuizStore } from '~/stores/quiz';
+import FavoriteButton from '~/components/FavoriteButton.vue';
 
 const props = defineProps({
   quiz: {
@@ -71,7 +109,7 @@ const props = defineProps({
   }
 });
 
-defineEmits(['start']);
+const emit = defineEmits(['start', 'ghost-mode']);
 
 const quizStore = useQuizStore();
 
@@ -194,6 +232,15 @@ function getOnlineImage() {
     default: return onlineImages.default;
   }
 }
+
+// Vérifier si l'utilisateur a déjà joué à ce quiz
+const hasPreviousScore = computed(() => {
+  if (!quizStore.currentUser) return false;
+  
+  return quizStore.currentUser.scores.some(score => 
+    score.quizId === props.quiz.id
+  );
+});
 </script>
 
 <style scoped>

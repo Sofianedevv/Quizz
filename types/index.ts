@@ -3,6 +3,7 @@ export interface Question {
   text: string;
   options: string[];
   correctAnswer: number;
+  image?: string; // URL ou données base64 de l'image pour la question
 }
 
 // quiz-app/types/index.ts
@@ -20,14 +21,20 @@ export interface Quiz {
 export interface UserScore {
   quizId: number;
   score: number;
-  maxScore: number;
   date: string;
+}
+
+export interface AnswerDetail {
+  questionIndex: number;
+  timeSpent: number;
+  correct: boolean;
 }
 
 export interface User {
   id: number;
   username: string;
-  email: string;
-  password?: string;
+  password: string;
   scores: UserScore[];
+  scoreDetails?: { [quizId: number]: AnswerDetail[] };
+  createdAt: string;
 } 

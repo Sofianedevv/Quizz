@@ -1,24 +1,38 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white">
+  <div :class="{
+    'bg-gradient-to-br from-blue-50 to-blue-100 text-gray-800': quizStore.isDayMode, 
+    'bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white': !quizStore.isDayMode
+  }" class="min-h-screen">
     <div class="container mx-auto px-4 py-12">
       <header class="text-center mb-12">
-        <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-500 mb-4">Quiz Master</h1>
-        <p class="text-xl text-gray-300">Testez vos connaissances avec nos quiz interactifs</p>
+        <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r mb-4"
+          :class="{'from-white to-blue-100': quizStore.isDayMode, 'from-pink-500 to-purple-500': !quizStore.isDayMode}">
+          Quizz Master
+        </h1>
+        <p :class="{'text-white': quizStore.isDayMode, 'text-gray-300': !quizStore.isDayMode}" class="text-xl">
+          Testez vos connaissances !
+        </p>
         
         <div class="mt-4 flex justify-center space-x-4">
-          <template v-if="currentUser">
-            <span class="text-pink-400">Bonjour, {{ currentUser.username }}</span>
+          <template v-if="quizStore.currentUser">
+            <span class="text-pink-400">Bonjour, {{ quizStore.currentUser.username }}</span>
             <button @click="logout" class="text-red-400 hover:text-red-600">Se déconnecter</button>
+            <NuxtLink to="/leaderboard" class="text-pink-400 hover:text-pink-600">Classement</NuxtLink>
           </template>
           <template v-else>
             <NuxtLink to="/auth/login" class="text-pink-400 hover:text-pink-600">Se connecter</NuxtLink>
             <NuxtLink to="/auth/register" class="text-pink-400 hover:text-pink-600">S'inscrire</NuxtLink>
+            <NuxtLink to="/leaderboard" class="text-pink-400 hover:text-pink-600">Classement</NuxtLink>
           </template>
+          <ToggleModeButton />
         </div>
       </header>
 
       <!-- Section de recherche et filtres -->
-      <div class="bg-gray-800 rounded-xl p-6 mb-10 shadow-lg">
+      <div :class="{
+        'bg-white/90 shadow-sm border border-blue-100 backdrop-blur-sm rounded-xl p-6 mb-10': quizStore.isDayMode, 
+        'bg-gray-800/90 backdrop-blur-sm rounded-xl p-6 mb-10': !quizStore.isDayMode
+      }">
         <!-- Barre de recherche -->
         <div class="max-w-2xl mx-auto mb-6">
           <div class="relative">
@@ -26,7 +40,11 @@
               type="text" 
               v-model="searchQuery" 
               placeholder="Rechercher un quiz par titre, description ou contenu..." 
-              class="w-full bg-gray-700 text-white rounded-lg px-4 py-3 pl-10 focus:outline-none focus:ring-2 focus:ring-pink-500"
+              :class="{
+                'bg-purple-50 text-gray-800 border-purple-200 focus:ring-purple-500': quizStore.isDayMode,
+                'bg-gray-700 text-white border-gray-600 focus:ring-pink-500': !quizStore.isDayMode,
+                'w-full px-4 py-3 pl-10 rounded-lg focus:outline-none focus:ring-2': true
+              }"
             />
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -48,7 +66,11 @@
         <div class="flex justify-center mt-4 mb-6">
           <button 
             @click="resetQuizData" 
-            class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full flex items-center"
+            :class="{
+              'bg-red-500 hover:bg-red-600': quizStore.isDayMode,
+              'bg-red-600 hover:bg-red-700': !quizStore.isDayMode
+            }"
+            class="text-white font-bold py-2 px-4 rounded-full flex items-center"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -60,12 +82,14 @@
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <!-- Filtres de catégories -->
           <div class="flex-1">
-            <h3 class="text-sm font-medium text-gray-400 mb-2">Catégories</h3>
+            <h3 class="text-sm font-medium mb-2" :class="{'text-gray-600': quizStore.isDayMode, 'text-gray-400': !quizStore.isDayMode}">Catégories</h3>
             <div class="flex flex-wrap gap-2">
               <button 
                 @click="selectedCategoryId = null" 
                 class="px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-                :class="selectedCategoryId === null ? 'bg-pink-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+                :class="selectedCategoryId === null ? 
+                  (quizStore.isDayMode ? 'bg-purple-600 text-white' : 'bg-pink-600 text-white') : 
+                  (quizStore.isDayMode ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-gray-700 text-gray-300 hover:bg-gray-600')"
               >
                 Toutes
               </button>
@@ -158,7 +182,7 @@
         <div class="mb-8">
           <div class="flex justify-between items-center mb-6">
             <h2 class="text-2xl font-semibold text-pink-400">
-              {{ filteredQuizzes.length }} quiz{{ filteredQuizzes.length !== 1 ? 's' : '' }} trouvé{{ filteredQuizzes.length !== 1 ? 's' : '' }}
+              {{ filteredQuizzes.length }} quizz{{ filteredQuizzes.length !== 1 ? '' : '' }} trouvé{{ filteredQuizzes.length !== 1 ? 's' : '' }}
             </h2>
             <div class="text-sm text-gray-400">
               Trier par: 
@@ -171,7 +195,7 @@
           </div>
           
           <!-- Message si aucun résultat -->
-          <div v-if="filteredQuizzes.length === 0" class="text-center py-16 bg-gray-800 rounded-xl">
+          <div v-if="filteredQuizzes.length === 0" class="text-center py-16 bg-gray-800 rounded-xl" :class="{'bg-gray-100': quizStore.isDayMode, 'bg-gray-800': !quizStore.isDayMode}">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -187,7 +211,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <TransitionGroup name="quiz-card">
                 <div v-for="quiz in paginatedQuizzes" :key="quiz.id">
-                  <QuizCard :quiz="quiz" @start="startQuiz(quiz.id)" />
+                  <QuizCard :quiz="quiz" @start="startQuiz(quiz.id)" @ghost-mode="startGhostMode(quiz.id)" />
                 </div>
               </TransitionGroup>
             </div>
@@ -260,6 +284,46 @@
           </div>
         </div>
         
+        <!-- Section des quiz favoris (visible uniquement si l'utilisateur est connecté et a des favoris) -->
+        <div v-if="quizStore.currentUser && favoriteQuizzes.length > 0" class="mb-12">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-semibold" 
+              :class="{'text-blue-600': quizStore.isDayMode, 'text-pink-400': !quizStore.isDayMode}">
+              Vos Favoris
+            </h2>
+            <NuxtLink to="/favorites" class="flex items-center text-sm"
+              :class="{'text-blue-500 hover:text-blue-700': quizStore.isDayMode, 'text-pink-400 hover:text-pink-300': !quizStore.isDayMode}">
+              Voir tous vos favoris
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </NuxtLink>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Limiter à 3 ou 6 favoris sur la page d'accueil -->
+            <QuizCard 
+              v-for="quiz in favoriteQuizzes.slice(0, 3)" 
+              :key="quiz.id" 
+              :quiz="quiz" 
+              @start="startQuiz(quiz.id)" 
+            />
+          </div>
+        </div>
+        
+        <!-- Ajouter un lien vers les favoris pour les utilisateurs connectés sans favoris -->
+        <div v-else-if="quizStore.currentUser && favoriteQuizzes.length === 0" class="mb-12 text-center p-6 rounded-lg"
+          :class="{'bg-white shadow border border-blue-100': quizStore.isDayMode, 'bg-gray-800': !quizStore.isDayMode}">
+          <h3 class="text-xl font-semibold mb-2">Vous n'avez pas encore de favoris</h3>
+          <p class="mb-4" :class="{'text-gray-600': quizStore.isDayMode, 'text-gray-300': !quizStore.isDayMode}">
+            Ajoutez des quizz à vos favoris en cliquant sur l'étoile
+          </p>
+          <NuxtLink to="/favorites" class="inline-flex items-center px-4 py-2 rounded-lg"
+            :class="{'bg-blue-500 hover:bg-blue-600 text-white': quizStore.isDayMode, 'bg-pink-500 hover:bg-pink-600 text-white': !quizStore.isDayMode}">
+            Gérer vos favoris
+          </NuxtLink>
+        </div>
+        
         <div class="mt-12 text-center">
           <div class="flex flex-col sm:flex-row justify-center gap-4">
             <NuxtLink to="/create-quiz" class="px-6 py-3 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg hover:from-pink-700 hover:to-purple-700 transition shadow-md flex items-center justify-center">
@@ -289,6 +353,15 @@
         </div>
       </div>
     </footer>
+
+    <div class="fixed bottom-4 right-4">
+      <button 
+        @click="resetLocalStorage" 
+        class="bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-700 transition-colors"
+      >
+        Réinitialiser les données
+      </button>
+    </div>
   </div>
 </template>
 
@@ -297,12 +370,12 @@ import { useQuizStore } from '~/stores/quiz';
 import { onMounted, computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import QuizCard from '~/components/QuizCard.vue';
+import ToggleModeButton from '~/components/ToggleModeButton.vue';
 
 const router = useRouter();
 const quizStore = useQuizStore();
 const quizzes = computed(() => quizStore.quizzes);
 const categories = computed(() => quizStore.categories);
-const currentUser = computed(() => quizStore.currentUser);
 
 // État pour le filtrage et le tri
 const selectedCategoryId = ref(null);
@@ -320,30 +393,39 @@ const hasActiveFilters = computed(() => {
          searchQuery.value.trim() !== '';
 });
 
-// Filtrer les quiz en fonction des critères
+// Filtrer les quiz en fonction des critères de recherche et des filtres
 const filteredQuizzes = computed(() => {
-  let result = quizzes.value;
+  let result = quizStore.quizzes;
   
-  if (selectedCategoryId.value) {
+  // Filtrer par catégorie
+  if (selectedCategoryId.value !== null) {
     result = result.filter(quiz => quiz.categoryId === selectedCategoryId.value);
   }
   
-  if (selectedDifficulty.value) {
+  // Filtrer par difficulté
+  if (selectedDifficulty.value !== null) {
     result = result.filter(quiz => quiz.difficulty === selectedDifficulty.value);
   }
   
+  // Filtrer par recherche
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase().trim();
-    result = result.filter(quiz => 
-      quiz.title.toLowerCase().includes(query) || 
-      quiz.description.toLowerCase().includes(query) ||
-      quiz.questions.some(q => 
-        q.text.toLowerCase().includes(query) ||
-        q.options.some(opt => opt.toLowerCase().includes(query))
-      )
-    );
+    result = result.filter(quiz => {
+      // Rechercher dans le titre
+      if (quiz.title.toLowerCase().includes(query)) return true;
+      
+      // Rechercher dans la description
+      if (quiz.description.toLowerCase().includes(query)) return true;
+      
+      // Rechercher dans les questions
+      return quiz.questions.some(question => 
+        question.text.toLowerCase().includes(query) || 
+        question.options.some(option => option.toLowerCase().includes(query))
+      );
+    });
   }
   
+  console.log(`Filtrage: ${result.length} quiz trouvés`);
   return result;
 });
 
@@ -446,13 +528,37 @@ function getCategoryName(categoryId) {
   return category ? category.name : 'Catégorie inconnue';
 }
 
+// Ajouter cette fonction pour déboguer
+function debugQuizzes() {
+  console.log('Nombre de quiz disponibles:', quizStore.quizzes.length);
+  console.log('Quiz disponibles:', quizStore.quizzes.map(q => ({ id: q.id, title: q.title })));
+  console.log('Filtres actuels:', {
+    catégorie: selectedCategoryId.value,
+    difficulté: selectedDifficulty.value,
+    recherche: searchQuery.value
+  });
+  console.log('Quiz filtrés:', filteredQuizzes.value.length);
+}
+
+// Appeler cette fonction au chargement de la page
 onMounted(() => {
   quizStore.loadFromLocalStorage();
+  debugQuizzes();
 });
 
 function startQuiz(quizId: number) {
   quizStore.startQuiz(quizId);
   router.push(`/quiz/${quizId}`);
+}
+
+function startGhostMode(quizId: number) {
+  const success = quizStore.activateGhostMode(quizId);
+  if (success) {
+    quizStore.startQuiz(quizId);
+    router.push(`/quiz/${quizId}`);
+  } else {
+    alert("Impossible d'activer le mode compétition. Vous devez d'abord terminer ce quiz au moins une fois.");
+  }
 }
 
 function logout() {
@@ -463,6 +569,22 @@ function resetQuizData() {
   if (confirm('Cette action va réinitialiser tous les quiz et charger les nouveaux quiz. Continuer?')) {
     localStorage.removeItem('quizzes');
     quizStore.initializeQuizzes();
+    window.location.reload();
+  }
+}
+
+// Récupérer les quiz favoris
+const favoriteQuizzes = computed(() => quizStore.getFavoriteQuizzes);
+
+function resetLocalStorage() {
+  if (confirm('Attention: Cette action va réinitialiser toutes les données de l\'application. Continuer?')) {
+    localStorage.clear();
+    quizStore.initializeQuizzes();
+    quizStore.initializeUsers();
+    quizStore.isDayMode = false;
+    quizStore.favorites = [];
+    quizStore.currentUser = null;
+    quizStore.saveToLocalStorage();
     window.location.reload();
   }
 }

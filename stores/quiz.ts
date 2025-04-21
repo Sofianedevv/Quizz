@@ -23,6 +23,10 @@ export const useQuizStore = defineStore('quiz', {
     ],
     users: [] as User[],
     currentUser: null as User | null,
+    isDayMode: false, // Par défaut, le mode nuit est activé
+    favorites: [] as number[], // Tableau des IDs de quiz favoris
+    ghostMode: false, // Indique si le mode fantôme est activé
+    ghostScores: [] as { questionIndex: number, timeSpent: number, correct: boolean }[], // Scores du fantôme
   }),
   
   getters: {
@@ -53,6 +57,12 @@ export const useQuizStore = defineStore('quiz', {
       
       // Trier par score total décroissant
       return leaderboard.sort((a, b) => b.totalScore - a.totalScore);
+    },
+    getFavoriteQuizzes: (state) => {
+      return state.quizzes.filter(quiz => state.favorites.includes(quiz.id));
+    },
+    isQuizFavorite: (state) => (quizId: number) => {
+      return state.favorites.includes(quizId);
     }
   },
   
@@ -62,8 +72,14 @@ export const useQuizStore = defineStore('quiz', {
       const storedQuizzes = localStorage.getItem('quizzes');
       const storedUsers = localStorage.getItem('users');
       const storedCurrentUser = localStorage.getItem('currentUser');
+      const storedIsDayMode = localStorage.getItem('isDayMode');
       
-      // Vérifier si les quizzes stockés sont à jour (28 quiz au total)
+      // Charger la préférence de mode
+      if (storedIsDayMode !== null) {
+        this.isDayMode = storedIsDayMode === 'true';
+      }
+      
+      // Vérifier si les quizzes stockés sont à jour
       const shouldReinitialize = !storedQuizzes || JSON.parse(storedQuizzes).length < 28;
       
       if (shouldReinitialize) {
@@ -75,30 +91,66 @@ export const useQuizStore = defineStore('quiz', {
       
       if (storedUsers) {
         this.users = JSON.parse(storedUsers);
+      } else {
+        this.initializeUsers();
       }
       
       if (storedCurrentUser) {
         this.currentUser = JSON.parse(storedCurrentUser);
       }
+      
+      // Vérifier et corriger les données utilisateur
+      this.verifyUserData();
+      
+      // Charger les favoris
+      const storedFavorites = localStorage.getItem('favorites');
+      if (storedFavorites) {
+        this.favorites = JSON.parse(storedFavorites);
+      }
     },
     
     // Sauvegarder les données dans localStorage
     saveToLocalStorage() {
-      // Pour les quizzes, vérifier si les images sont en base64 et les tronquer pour le log
-      const quizzesForLog = this.quizzes.map(quiz => {
-        const quizCopy = { ...quiz };
-        if (quizCopy.image && quizCopy.image.startsWith('data:image')) {
-          quizCopy.image = quizCopy.image.substring(0, 50) + '... [tronqué]';
+      try {
+        // Pour les quizzes, vérifier si les images sont en base64 et les tronquer pour le log
+        const quizzesForLog = this.quizzes.map(quiz => {
+          const quizCopy = { ...quiz };
+          if (quizCopy.image && quizCopy.image.startsWith('data:image')) {
+            quizCopy.image = quizCopy.image.substring(0, 50) + '... [tronqué]';
+          }
+          return quizCopy;
+        });
+        
+        console.log('Sauvegarde des quizzes:', quizzesForLog.length);
+        
+        // Sauvegarder les données dans localStorage
+        localStorage.setItem('quizzes', JSON.stringify(this.quizzes));
+        localStorage.setItem('users', JSON.stringify(this.users));
+        
+        if (this.currentUser) {
+          localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
         }
-        return quizCopy;
-      });
-      
-      console.log('Sauvegarde des quizzes:', quizzesForLog);
-      
-      localStorage.setItem('quizzes', JSON.stringify(this.quizzes));
-      localStorage.setItem('users', JSON.stringify(this.users));
-      if (this.currentUser) {
-        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+        
+        localStorage.setItem('isDayMode', this.isDayMode.toString());
+        localStorage.setItem('favorites', JSON.stringify(this.favorites));
+        
+        console.log('Données sauvegardées avec succès dans localStorage');
+        
+        // Vérifier la taille des données stockées
+        const quizzesSize = new Blob([JSON.stringify(this.quizzes)]).size;
+        console.log(`Taille des données quiz: ${(quizzesSize / 1024 / 1024).toFixed(2)} MB`);
+        
+        // Vérifier si on approche de la limite de localStorage (généralement 5-10 MB)
+        if (quizzesSize > 4 * 1024 * 1024) {
+          console.warn('Attention: Les données stockées approchent de la limite de localStorage');
+        }
+      } catch (error) {
+        console.error('Erreur lors de la sauvegarde dans localStorage:', error);
+        
+        // Si l'erreur est liée à la taille des données (quota exceeded)
+        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+          alert('Erreur: La limite de stockage a été atteinte. Certaines données n\'ont pas pu être sauvegardées.');
+        }
       }
     },
     
@@ -113,99 +165,149 @@ export const useQuizStore = defineStore('quiz', {
     },
     
     answerQuestion(optionIndex: number) {
+      console.log(`Réponse à la question ${this.currentQuestionIndex + 1}: option ${optionIndex}`);
+      
+      // Enregistrer la réponse de l'utilisateur
       this.userAnswers.push(optionIndex);
       
+      // Vérifier si la réponse est correcte
       const currentQuestion = this.getCurrentQuestion;
       if (currentQuestion && optionIndex === currentQuestion.correctAnswer) {
         this.score++;
+        console.log(`Réponse correcte! Score actuel: ${this.score}`);
+      } else {
+        console.log(`Réponse incorrecte. Score actuel: ${this.score}`);
       }
       
+      // Passer à la question suivante
       this.currentQuestionIndex++;
       
-      // Si le quiz est terminé et qu'un utilisateur est connecté, enregistrer le score
-      if (this.isQuizFinished && this.currentUser && this.currentQuiz) {
-        this.saveScore({
-          quizId: this.currentQuiz.id,
-          score: this.score,
-          maxScore: this.currentQuiz.questions.length,
-          date: new Date().toISOString()
-        });
+      // Si le quiz est terminé, enregistrer le score
+      if (this.isQuizFinished && this.currentQuiz) {
+        console.log(`Quiz terminé! Score final: ${this.score}/${this.currentQuiz.questions.length}`);
+        
+        // Enregistrer le score si un utilisateur est connecté
+        if (this.currentUser) {
+          console.log(`Enregistrement du score pour l'utilisateur ${this.currentUser.username}`);
+          
+          // Créer un objet de score
+          const scoreData = {
+            quizId: this.currentQuiz.id,
+            score: this.score,
+            date: new Date().toISOString()
+          };
+          
+          // Appeler la méthode saveScore
+          this.saveScore(scoreData);
+        } else {
+          console.log("Aucun utilisateur connecté, le score ne sera pas enregistré");
+        }
       }
     },
     
     // Enregistrer un score pour l'utilisateur actuel
-    saveScore(scoreData: { quizId: number; score: number; maxScore: number; date: string }) {
+    saveScore(scoreData: UserScore) {
       if (!this.currentUser) return;
       
-      const userIndex = this.users.findIndex(u => u.id === this.currentUser!.id);
-      if (userIndex === -1) return;
+      // Ajouter le score
+      this.currentUser.scores.push(scoreData);
       
-      if (!this.users[userIndex].scores) {
-        this.users[userIndex].scores = [];
-      }
-      
-      this.users[userIndex].scores.push(scoreData);
+      // Sauvegarder dans localStorage
       this.saveToLocalStorage();
+      
+      console.log(`Score sauvegardé: ${scoreData.score} pour le quiz ${scoreData.quizId}`);
     },
     
     // Authentification
-    login(email: string, password: string) {
-      const user = this.users.find(u => u.email === email && u.password === password);
+    login(username: string, password: string): boolean {
+      // Vérifier si l'utilisateur existe
+      const user = this.users.find(u => 
+        u.username.toLowerCase() === username.toLowerCase() && 
+        u.password === password
+      );
+      
       if (user) {
-        // Créer un nouvel objet sans le mot de passe
-        const { password: _, ...userWithoutPassword } = user;
-        this.currentUser = userWithoutPassword as User;
-        this.saveToLocalStorage();
+        this.currentUser = user;
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        console.log('Connexion réussie pour:', username);
         return true;
       }
+      
+      console.log('Échec de connexion pour:', username);
       return false;
     },
     
     logout() {
       this.currentUser = null;
       localStorage.removeItem('currentUser');
+      console.log('Déconnexion réussie');
     },
     
-    register(userData: { username: string; email: string; password: string }) {
-      // Vérifier si l'email existe déjà
-      if (this.users.some(u => u.email === userData.email)) {
+    register(username: string, password: string): boolean {
+      // Vérifier si le nom d'utilisateur existe déjà
+      const userExists = this.users.some(u => 
+        u.username.toLowerCase() === username.toLowerCase()
+      );
+      
+      if (userExists) {
+        console.log('Nom d\'utilisateur déjà pris:', username);
         return false;
       }
       
       // Créer un nouvel utilisateur
-      const newUser = {
-        id: Date.now(),
-        username: userData.username,
-        email: userData.email,
-        password: userData.password,
-        scores: []
+      const newUser: User = {
+        id: this.users.length + 1,
+        username,
+        password,
+        scores: [],
+        createdAt: new Date().toISOString()
       };
       
       this.users.push(newUser);
+      this.currentUser = newUser;
       
-      // Créer une version sans mot de passe pour currentUser
-      const { password: _, ...userWithoutPassword } = newUser;
-      this.currentUser = userWithoutPassword as User;
+      // Sauvegarder dans le localStorage
+      localStorage.setItem('users', JSON.stringify(this.users));
+      localStorage.setItem('currentUser', JSON.stringify(newUser));
       
-      this.saveToLocalStorage();
+      console.log('Inscription réussie pour:', username);
       return true;
     },
     
     // Ajouter un nouveau quiz
-    addQuiz(quizData: Omit<Quiz, 'id'>) {
-      const newQuiz = {
-        id: Date.now(),
-        ...quizData,
-        questions: quizData.questions.map((q, index) => ({
-          ...q,
-          id: Date.now() + index
-        })),
-        image: quizData.image || getImageForCategory(quizData.categoryId)
+    addQuiz(quizData: any): number {
+      // Générer un nouvel ID pour le quiz
+      const newId = this.quizzes.length > 0 
+        ? Math.max(...this.quizzes.map(q => q.id)) + 1 
+        : 1;
+      
+      // Ajouter des IDs aux questions
+      const questions = quizData.questions.map((q: any, index: number) => ({
+        ...q,
+        id: index + 1
+      }));
+      
+      // Créer le nouveau quiz
+      const newQuiz: Quiz = {
+        id: newId,
+        title: quizData.title,
+        description: quizData.description,
+        categoryId: quizData.categoryId,
+        difficulty: quizData.difficulty,
+        questions: questions,
+        image: quizData.image
       };
       
+      // Ajouter le quiz à la liste
       this.quizzes.push(newQuiz);
+      
+      // Sauvegarder dans localStorage
       this.saveToLocalStorage();
-      return newQuiz.id;
+      
+      console.log('Quiz ajouté avec succès:', newQuiz.title);
+      console.log('Nombre total de quiz:', this.quizzes.length);
+      
+      return newId;
     },
     
     // Ajouter des quiz de démonstration
@@ -1285,6 +1387,205 @@ export const useQuizStore = defineStore('quiz', {
         }
       ];
       this.saveToLocalStorage();
+    },
+    initializeUsers() {
+      // Vérifier si des utilisateurs existent déjà
+      if (this.users.length === 0) {
+        // Ajouter un utilisateur par défaut pour les tests
+        this.users.push({
+          id: 1,
+          username: 'demo',
+          password: 'password',
+          scores: [],
+          createdAt: new Date().toISOString()
+        });
+        
+        // Sauvegarder dans le localStorage
+        localStorage.setItem('users', JSON.stringify(this.users));
+        console.log('Utilisateur de démonstration créé: demo / password');
+      }
+    },
+    // Ajouter cette méthode pour déboguer les scores
+    debugScores() {
+      console.log('===== DÉBOGAGE DES SCORES =====');
+      console.log('Utilisateur actuel:', this.currentUser);
+      
+      if (this.currentUser) {
+        console.log('Scores de l\'utilisateur:', this.currentUser.scores);
+        
+        // Trouver l'utilisateur dans le tableau des utilisateurs
+        const userInArray = this.users.find(u => u.id === this.currentUser!.id);
+        console.log('Utilisateur dans le tableau:', userInArray);
+        
+        if (userInArray) {
+          console.log('Scores dans le tableau:', userInArray.scores);
+        }
+      }
+      
+      console.log('Tous les utilisateurs:', this.users);
+      console.log('===== FIN DU DÉBOGAGE =====');
+    },
+    // Ajouter cette méthode pour vérifier la structure des données utilisateur
+    verifyUserData() {
+      console.log("=== VÉRIFICATION DES DONNÉES UTILISATEUR ===");
+      
+      // Vérifier l'utilisateur actuel
+      if (this.currentUser) {
+        console.log("Utilisateur actuel:", this.currentUser);
+        
+        // Vérifier si l'utilisateur a un tableau de scores
+        if (!this.currentUser.scores) {
+          console.error("L'utilisateur actuel n'a pas de tableau de scores!");
+          this.currentUser.scores = [];
+          console.log("Tableau de scores créé");
+        }
+        
+        // Vérifier si l'utilisateur existe dans le tableau des utilisateurs
+        const userInArray = this.users.find(u => u.id === this.currentUser!.id);
+        
+        if (!userInArray) {
+          console.error("L'utilisateur actuel n'existe pas dans le tableau des utilisateurs!");
+          this.users.push(this.currentUser);
+          console.log("Utilisateur ajouté au tableau des utilisateurs");
+        }
+      } else {
+        console.log("Aucun utilisateur connecté");
+      }
+      
+      // Vérifier tous les utilisateurs
+      console.log("Nombre d'utilisateurs:", this.users.length);
+      
+      this.users.forEach((user, index) => {
+        console.log(`Utilisateur ${index + 1}:`, user);
+        
+        // Vérifier si l'utilisateur a un tableau de scores
+        if (!user.scores) {
+          console.error(`L'utilisateur ${user.username} n'a pas de tableau de scores!`);
+          user.scores = [];
+          console.log("Tableau de scores créé");
+        }
+      });
+      
+      console.log("=== FIN DE LA VÉRIFICATION ===");
+      
+      // Sauvegarder les données corrigées
+      this.saveToLocalStorage();
+    },
+    toggleDayMode() {
+      this.isDayMode = !this.isDayMode;
+      
+      // Ajouter ou supprimer la classe day-mode sur l'élément HTML
+      if (this.isDayMode) {
+        document.documentElement.classList.add('day-mode');
+      } else {
+        document.documentElement.classList.remove('day-mode');
+      }
+      
+      localStorage.setItem('isDayMode', this.isDayMode.toString());
+    },
+    addToFavorites(quizId: number) {
+      if (!this.favorites.includes(quizId)) {
+        this.favorites.push(quizId);
+        this.saveToLocalStorage();
+      }
+    },
+    removeFromFavorites(quizId: number) {
+      const index = this.favorites.indexOf(quizId);
+      if (index !== -1) {
+        this.favorites.splice(index, 1);
+        this.saveToLocalStorage();
+      }
+    },
+    toggleFavorite(quizId: number) {
+      if (this.favorites.includes(quizId)) {
+        this.removeFromFavorites(quizId);
+      } else {
+        this.addToFavorites(quizId);
+      }
+    },
+    // Activer le mode fantôme pour un quiz spécifique
+    activateGhostMode(quizId: number) {
+      // Vérifier si l'utilisateur est connecté
+      if (!this.currentUser) {
+        console.warn("L'utilisateur doit être connecté pour utiliser le mode fantôme");
+        return false;
+      }
+      
+      // Vérifier si l'utilisateur a déjà joué à ce quiz
+      const previousScore = this.currentUser.scores.find(score => score.quizId === quizId);
+      if (!previousScore) {
+        console.warn("Aucun score précédent trouvé pour ce quiz");
+        return false;
+      }
+      
+      // Récupérer les détails du meilleur score précédent
+      const bestScore = this.getBestScoreDetails(quizId);
+      if (!bestScore || !bestScore.details) {
+        console.warn("Aucun détail de score précédent trouvé");
+        return false;
+      }
+      
+      // Activer le mode fantôme
+      this.ghostMode = true;
+      this.ghostScores = bestScore.details;
+      
+      console.log("Mode fantôme activé avec", this.ghostScores.length, "réponses");
+      return true;
+    },
+    
+    // Désactiver le mode fantôme
+    deactivateGhostMode() {
+      this.ghostMode = false;
+      this.ghostScores = [];
+    },
+    
+    // Enregistrer les détails d'une réponse
+    saveAnswerDetail(questionIndex: number, timeSpent: number, correct: boolean) {
+      if (!this.currentUser || !this.currentQuiz) return;
+      
+      // Si c'est la première réponse, initialiser le tableau de détails
+      if (!this.currentUser.scoreDetails) {
+        this.currentUser.scoreDetails = {};
+      }
+      
+      // Si c'est le premier score pour ce quiz, initialiser le tableau
+      if (!this.currentUser.scoreDetails[this.currentQuiz.id]) {
+        this.currentUser.scoreDetails[this.currentQuiz.id] = [];
+      }
+      
+      // Ajouter les détails de la réponse
+      this.currentUser.scoreDetails[this.currentQuiz.id].push({
+        questionIndex,
+        timeSpent,
+        correct
+      });
+      
+      // Sauvegarder dans localStorage
+      this.saveToLocalStorage();
+    },
+    
+    // Obtenir les détails du meilleur score pour un quiz
+    getBestScoreDetails(quizId: number) {
+      if (!this.currentUser) return null;
+      
+      // Trouver tous les scores pour ce quiz
+      const quizScores = this.currentUser.scores.filter(score => score.quizId === quizId);
+      if (quizScores.length === 0) return null;
+      
+      // Trouver le meilleur score
+      const bestScore = quizScores.reduce((best, current) => 
+        current.score > best.score ? current : best
+      , quizScores[0]);
+      
+      // Récupérer les détails de ce score
+      if (!this.currentUser.scoreDetails || !this.currentUser.scoreDetails[quizId]) {
+        return { score: bestScore.score, details: null };
+      }
+      
+      return { 
+        score: bestScore.score, 
+        details: this.currentUser.scoreDetails[quizId]
+      };
     }
   }
 }); 
